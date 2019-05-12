@@ -16,6 +16,8 @@ b = 0.2 #RS , IB , FS: 0.2
 c = -65 #RS , FS: −65 IB: −55
 d = 8 #RS: 8 , IB: 4 , FS: 2
 tau_s = 10 # decay of synapses [ ms ]
+tau_d = 500 # synaptic depression [ ms ]
+stp_u = 0.5 # STP parameter
 
 # 1 . 2 ) Input Parameters
 tr= array([200,700] )/dt # stm time
@@ -34,6 +36,8 @@ u[0] = -14 # steady state
 s_in = zeros( n_in ) # synaptic variable
 E_in = zeros( n_in ) # rev potential
 p_rate = dt * rate_in * 1e-3 # abbrev
+h = ones( n_in )
+lastsp = -infty * ones ( n_in )
 
 
 # 3 ) for−loop over time
@@ -42,6 +46,11 @@ for t in arange(T-1):
     if t>tr[0] and t<tr[1] :
         # NEW: get input Poisson spikes
         p = uniform(size=n_in) < p_rate 
+
+        #update synaptic depression
+        tmp = exp ( dt * ( lastsp [p]-t ) / tau_d )
+        h[p] = 1 - (1+( stp_u -1) * h [p] ) * tmp
+        lastsp[p] = t
     else :
         p = 0 # no input
 
