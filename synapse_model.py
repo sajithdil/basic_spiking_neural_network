@@ -15,11 +15,14 @@ a = 0.02 #RS , IB: 0.02 , FS: 0.1
 b = 0.2 #RS , IB , FS: 0.2
 c = -65 #RS , FS: −65 IB: −55
 d = 8 #RS: 8 , IB: 4 , FS: 2
+tau_s = 10 # decay of synapses [ ms ]
 
 # 1 . 2 ) Input Parameters
-Iapp=10 #(this should be 7?)
 tr= array([200,700] )/dt # stm time
-tau_s = 10 # decay of synapses [ ms ]
+rate_in = 2 # input rate
+n_in = 100 # number of inputs
+w_in = 0.07 # input weights
+W_in = w_in * ones( n_in ) # vector
 
 
 # 2 ) reserve memory
@@ -28,14 +31,24 @@ v = zeros(T)
 u = zeros(T)
 v[0] = -70 # resting potential
 u[0] = -14 # steady state
+s_in = zeros( n_in ) # synaptic variable
+E_in = zeros( n_in ) # rev potential
+p_rate = dt * rate_in * 1e-3 # abbrev
+
 
 # 3 ) for−loop over time
 for t in arange(T-1):
 # 3 . 1 ) get input
     if t>tr[0] and t<tr[1] :
-        I = Iapp
+        # NEW: get input Poisson spikes
+        p = uniform(size=n_in) < p_rate 
     else :
-        I = 0
+        p = 0 # no input
+
+    # NEW: calculate input current
+    s_in = ( 1 - dt / tau_s ) * s_in + p
+    I = dot( W_in , s_in  * E_in )
+    I -= dot( W_in , s_in ) * v[t]
 
     if v[t] < 35:
 # 3 . 2 ) update ODE (ordinary differential equations)
@@ -56,5 +69,5 @@ tvec = arange(0, tmax, dt)
 plot(tvec, v, 'b', label = 'Voltage trace')
 xlabel('Time [ ms ]')
 ylabel('Membrane voltage [mV]')
-title( 'A single qIF neuron with current step input6' )
+title( 'A single qIF neuron with Poisson inputs' )
 show()
