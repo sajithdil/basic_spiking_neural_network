@@ -89,9 +89,9 @@ for t in arange(T-1):
     u[t + 1] = u[t] + dt * du
 
 # 3 . 3 ) spike!
-    v[t] = 35
-    v[t + 1] = c
-    u[t + 1] = u [t] + d
+    v[t][fired] = 35
+    v[t + 1][fired] = c
+    u[t + 1][fired] = u[t][fired] + d[fired]
 
 
 # 4 ) plot voltage trace
