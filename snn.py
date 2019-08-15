@@ -96,12 +96,16 @@ for t in arange(T-1):
 
 # 4 ) plot voltage trace
 
-tspk, nspk = nonzero(v==35)
+tspk,nspk = nonzero(v==35)
+idx_i = in1d(nspk,nonzero(inh)[0])
+idx_e = logical_not(idx_i)
 
 figure()
-tvec = arange(0, tmax, dt)
-plot(tvec, v, 'b', label = 'Voltage trace')
-xlabel('Time [ ms ]')
-ylabel('Membrane voltage [mV]')
-title( 'A recurrent network of 1000 qIF neurons' )
+plot(tspk[idx_e]*dt,nspk[[idx_e]],'k.',label="Exc.",markersize=2)
+plot(tspk[idx_i]*dt,nspk[[idx_i]],'r.',label="inh.",markersize=2)
+xlabel("Time [ms]")
+ylabel("Neuron Number [#]")
+xlim(0,tmax)
+title("An connected network of neurons")
+legend(loc="upper right")
 show()
