@@ -8,7 +8,6 @@ import random
 
 dt = 1
 tmax=1000
-N=1000 #no of neurons
 
 a = 0.02
 b = 0.2
