@@ -119,6 +119,8 @@ for t in arange(0,tmax): # simulation of runtime ms
     LFP[t][1]=sum(v[Ne:N])     # sum of voltages of inhibitory per ms
     LFP[t][2] = sum(v)            # sum of all voltages for each ms
 
+np.savetxt("final_weights.csv", S, delimiter=",")
+
 figure()
 tvec = arange(0, tmax)
 fig,(vax1,vax2) = subplots(2)
