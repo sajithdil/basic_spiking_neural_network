@@ -6,171 +6,135 @@ from pylab import *
 import numpy as np
 import random
 
-dt = 1
-tmax=1000
+
+def column(matrix, i):
+    return [row[i] for row in matrix]
+
+
+tmax=1000 # Runtime in ms
 N=1000 #no of neurons
-
-a = 0.02
-b = 0.2
-c= -65
-d = 8
-S = 0
-I = 10 #I is always applied continuous spike train current
-I2 = 0
-I3 = 0 #I3 only ever spikes if I1 or I2 spiked
-
-v1 = np.zeros([tmax])
-v2 = np.zeros([tmax])
-v3 = np.zeros([tmax])
-
-u1 = np.zeros([tmax]) 
-u2 = np.zeros([tmax])
-u3 = np.zeros([tmax])
-
-dv1 = np.zeros([tmax])
-dv2 = np.zeros([tmax])
-dv3 = np.zeros([tmax])
-
-fired_neurons = [[] for i in arange(0,1000)]
+Ne=800  #no of exc neurons             
+Ni=200 #no of inh neurons      
 
 w_upper = 2.0
 w_lower = -2.0
 
-v1v3W = 2.0
-v2v3W = 2.0
+#np.random.seed(1)
 
-v1v3W_changes = np.full(tmax,2.0)
-v2v3W_changes = np.full(tmax,2.0)
+                    # Excitatory neurons    Inhibitory neurons
+a = np.concatenate((np.full(Ne,0.02), np.full(Ni,0.01) ))
+b = np.concatenate((np.full(Ne,0.2),  np.full(Ni,0.2) ))
+c = np.concatenate((np.full(Ne,-65),  np.full(Ni,-65) ))
+d = np.concatenate((np.full(Ne,8),    np.full(Ni,2) ))
+#S = np.concatenate((0.5*np.random.uniform(0,1,(Ne,N)),    np.random.uniform(-1,0,(Ni,N)) )) # Excitatory neurons (positive weights only)    Inhibitory neurons (negative weights only) , multplying 0.5 for exh neurons seems to provide a more balanced NN 
+Se = 0.5*np.random.rand(Ne+Ni,Ne)
+Si = -np.random.rand(Ne+Ni,Ni)
+S = np.hstack((Si,Se))
+#S = S.T #flip the array so that each row has inh neruons at the end
+np.savetxt("inital_weights.csv", S, delimiter=",")
 
-for t in arange(0,tmax-1):
+print("initialized and saved inital weights")
+
+
+#totzeros=0             # Count of zero-weight synapses
+plasticity=19          # Plastic changes happen after the first 20 ms of runtime (in python 0-19)
+v=-65*np.ones(N)    # Initial values of v
+u=b * v                 # Initial values of u
+firings=[]           # spike timings
+LFP=np.zeros((tmax,3))
+ADJ=np.zeros((tmax,N))
+#count=0
+#count2=0
+
+
+#MAKE THE NETWORK SPARSELY CONNECTED 
+M=np.random.rand(N,N) #Create an array of the given shape and populate it with random samples from a uniform distribution over [0, 1].
+p=0.7                  # 30% of zero-weight synapses when p=0.7, this variable is used when the network is calculating spareness, anything greater than p is removed
+for i in arange(tmax):
+    for jjj in arange(tmax):
+        if M[i,jjj]>p:
+             S[i][jjj]=0
+             #totzeros=totzeros+1
+        
+        if i==jjj:
+             S[i][jjj]=0 #no self connections
+             #totzeros=totzeros+1
+SPARSE=S
+
+np.savetxt("sparse_weights.csv", SPARSE, delimiter=",")
+
+print("initialized and saved sparsed weights")
+
+for t in arange(0,tmax): # simulation of runtime ms
     print("timestep: " + str(t))
-    s = random.randint(0,1)
-    if s == 0:
-        I2=0
-    else:
-        I2=10
+    I=np.concatenate((5*np.random.randn(Ne),2*np.random.randn(Ni))) # thalamic input (apparently there is a random current firing between synapses, even during resting, this is seen in both reference examples), this is replaced by the input from spike trains and the rest should probably become zero, its only thalamic for randomized input
+    fired=[i for i,x in enumerate(v) if x > 30]           # indices of spikes #spikes here are 30 not 35 (get fired neruons from previous step)
 
-    if v1[t]<35:
-        dv = (0.04 * v1[t] + 5) * v1[t] + 140 - u1[t]
-        dv1[t]=dv
-        v1[t + 1] = v1[t] + (dv + I) * dt
-        du = a * (b * v1[t] - u1[t])
-        u1[t + 1] = u1[t] + dt * du 
-    else:
-        v1[t] = 35
-        v1[t + 1] = c
-        u1[t + 1] = u1[t] + d
-        fired_neurons[t].append('v1')
+    for jj in arange(0,len(fired)):
+        ADJ[t][fired[jj]]=1            # RECORD WHICH NEURONS FIRE AT EACH MS
+ 
+    if t>plasticity:        #t>20 for STDP on, t>tmax for STDP off
+        for j in arange(0,N):
+            #count2=count2+1
+            if ADJ[t][j]==1:   #neuron j fired at time t (for each neuron fired at that step)
+                #count=count+1;
+                for x in arange(0, plasticity):     #range of ms over which synaptic strengthening and weakening occur (go back 20 (plasticity) steps and look for fired neurons)
+                    for k in arange(0,N): #iterate over all the neurons at that timestep looking for the neurons that fired
+                        if ADJ[t-x][k]==1: # go backwards in timestep looking for the closest fired at 20 : 20,19,18,17
 
+                            S[j][k]=S[j][k]*(1+(0.9*exp(x/20.0))) # synaptic weight of pair undergoes larger increment if dT is smaller and negative (increase weight i think?)
+                            S[k][j]=S[k][j]*(1+(-0.925*exp(-x/20.0))) # synaptic weight of pair undergoes larger decrement is dT is smaller and positive (decrease weight i think?)
 
-    if v2[t]<35:
-        dv = (0.04 * v2[t] + 5) * v2[t] + 140 - u2[t]
-        dv2[t]=dv
-        v2[t + 1] = v2[t] + (dv + I2) * dt
-        du = a * (b * v2[t] - u2[t])
-        u2[t + 1] = u2[t] + dt * du 
-    else:
-        v2[t] = 35
-        v2[t + 1] = c
-        u2[t + 1] = u2[t] + d
-        fired_neurons[t].append('v2')
+                            # set a maximum value for synaptic weights
+                            if S[j][k]>w_upper:
+                                S[j][k]=w_upper
+                            
+                            if S[j][k]<w_lower:
+                                S[j][k]=w_lower
+                            
+                            if S[k][j]>w_upper:
+                                S[k][j]=w_upper
+                            
+                            if S[k][j]<w_lower:
+                                S[k][j]=w_lower
 
-    #check neuon 1 and 2 for spike at this point in time, if spiked, resolve action potiential of neuron 3
-    #it is not a multiplication of weights like in traditional methods
-    #for a given post neuron at that timestep, the weights of all synapses for fired pre neurons are added together
-    #then added to the current 9again not multiplied)
-
-    #first check i1 synapse
-    added_weights=0
-    if v1[t] == 35:
-        added_weights = added_weights + v1v3W
-        I3=10
-
-    #first check i2 synapse and resolve    
-    if v2[t] == 35:
-        added_weights = added_weights + v2v3W
-        I3=10
-
-    #doing it the above way ensure I3 current only eveer spikes if v1 of v2 ever spiked
-    #then add the weights to I3
-    if I3==10:
-        I3=I3+added_weights
-
-    if v3[t]<35:
-        dv = (0.04 * v3[t] + 5) * v3[t] + 140 - u3[t]
-        dv3[t]=dv
-        v3[t + 1] = v3[t] + (dv + I3) * dt
-        du = a * (b * v3[t] - u3[t])
-        u3[t + 1] = u3[t] + dt * du 
-    else:
-        v3[t] = 35
-        v3[t + 1] = c
-        u3[t + 1] = u3[t] + d
-        fired_neurons[t].append('v3')
-
-    I3=0
-
-    #add the minuimum 20ms check
-    #do stdp
-    if len(fired_neurons[t]) > 0:
-        for fIndex in arange(0,len(fired_neurons[t])):
-
-            #flipping this seems to create different results, check it later
-
-            if(fired_neurons[t][fIndex]=='v1'):
-                for lookBack in arange(1,20):
-                    if 'v3' in fired_neurons[t-lookBack]:
-                        v1v3W=v1v3W*(1+(-0.925*exp(-lookBack/20.0))) 
-                        
-
-            if(fired_neurons[t][fIndex]=='v2'):
-                for lookBack in arange(1,20):
-                    if 'v3' in fired_neurons[t-lookBack]:
-                        v2v3W=v2v3W*(1+(-0.925*exp(-lookBack/20.0))) 
-
-            if(fired_neurons[t][fIndex]=='v3'):
-                for lookBack in arange(1,20):
-                    if 'v1' in fired_neurons[t-lookBack]:
-                        v1v3W=v1v3W*(1+(0.9*exp(lookBack/20.0))); 
-
-                    if 'v2' in fired_neurons[t-lookBack]:
-                        v2v3W=v2v3W*(1+(0.9*exp(lookBack/20.0))); 
-                        
-            if v1v3W > w_upper:
-                v1v3W = w_upper
-
-            if v1v3W < w_lower:
-                v1v3W = w_lower
-
-            if v2v3W > w_upper:
-                v2v3W = w_upper
-
-            if v2v3W < w_lower:
-                v2v3W = w_lower
-
-    v1v3W_changes[t] = v1v3W
-    v2v3W_changes[t] = v2v3W
+    #save the firings to print a chart
+    print("fired: " + str(fired))
+    firTemp = [[t,fired[i]] for i in arange(0,len(fired))]
+    #print("firTemp: " + str(firTemp))
+    if firTemp != []:
+        firings = firings+ firTemp
 
 
+    v[fired] = c[fired]
+    u[fired]=u[fired]+d[fired]
 
+    I=I+sum((S[:][fired]).T,1) #adjustment of curent based on synaptic weight value. get the columns of the fired neurons (meaning get all the post fired neuons, i think?), then sum the weights, and add to I (not 100% sure of the logic) 
+
+    v=v+0.5*(0.04*v**2+5 * v+140-u+I) # step 0.5 ms
+    v=v+0.5*(0.04*v**2+5 * v+140-u+I) # for numerical stability (apparently, fire twice per second)
+    u=u+a*(b*v-u)                 # update u
+
+    LFP[t][0]=sum(v[0:Ne])         # sum of voltages of excitatory per ms 
+    LFP[t][1]=sum(v[Ne:N])     # sum of voltages of inhibitory per ms
+    LFP[t][2] = sum(v)            # sum of all voltages for each ms
 
 figure()
-tvec = arange(0, tmax, dt)
+tvec = arange(0, tmax)
 fig,(vax1,vax2) = subplots(2)
-vax1.plot(tvec, v1, 'r', label = 'v1 Voltage trace')
-vax1.plot(tvec, v2, 'g', label = 'v2 Voltage trace')
-vax1.plot(tvec, v3, 'b', label = 'v3 Voltage trace')
+vax1.plot(column(firings,0), column(firings,1), 'r.',label='Neurons',markersize=2)
 xlabel('Time [ ms ]')
 ylabel('Membrane voltage [mV]')
-title( 'voltage spikes' )
+title( 'Spike raster - RS,FS STDP in a random network' )
 
-vax2.plot(tvec, v1v3W_changes, 'b', label = 'v1-v3 Weight Change')
-vax2.plot(tvec, v2v3W_changes, 'g', label = 'v2-v3 Weight Change')
+vax2.plot(tvec, column(LFP,0), 'b', label = '# sum of voltages of excitatory per ms ')
+vax2.plot(tvec, column(LFP,1), 'r', label = '# sum of voltages of inhibitory per ms')
+vax2.plot(tvec, column(LFP,2), 'g', label = '# sum of all voltages for each ms')
 xlabel('Time [ ms ]')
-ylabel('Weight')
-title( 'weight changes' )
+ylabel('Membrane voltage [mV]')
+title( 'LFP - RS,FS STDP in a random network' )
 show()
 
 
-    
+
 
